@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+  <meta name="theme-color" content="#E6B23C"/>
+  <link rel="manifest" href="./manifest.json"/>
+  <title>PlateEye - Monitoramento</title>
+  <link rel="stylesheet" href="./premium.css"/>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
+  <script src="./firebase-config.js"></script>
+  <script src="./firebaseRegistro.js"></script>
+  <script src="./firestore-sync.js"></script>
+</head>
+<body style="display:none">
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-badge"></div>
+        <div>
+          <h1>PlateEye</h1>
+          <p id="userEmail">—</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+  <a href="./index.html"><span class="ico">▣</span><span>Dashboard</span></a>
+  <a href="./alerts.html"><span class="ico">🚨</span><span>Alertas</span></a>
+  <a href="./cameras.html"><span class="ico">📷</span><span>Câmeras</span></a>
+  <a href="./monitoring.html"><span class="ico">◎</span><span>Monitoramento</span></a>
+  <a href="./reports.html"><span class="ico">≋</span><span>Relatórios</span></a>
+  <a href="./users.html"><span class="ico">👤</span><span>Usuários</span></a>
+  <a href="./config.html"><span class="ico">⚙</span><span>Configurações</span></a>
+  <a href="#" onclick="logout()"><span class="ico">🚪</span><span>Sair</span></a>
+</nav>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" type="button" onclick="toggleSidebar()"><span>☰</span></button>
+          <div>
+            <h2>Monitoramento</h2>
+            <div class="subtle">Base sensível de placas e alvos monitorados</div>
+          </div>
+        </div>
+        <div class="right">
+          <button id="conn" class="pill">Conectando...</button>
+        </div>
+      </header>
+
+      <div class="dashboard-shell">
+        <section class="card pad" style="margin-bottom:14px;">
+          <div class="stats-grid">
+            <div class="card kpi">
+              <div class="label">Total</div>
+              <div id="monTotal" class="value">0</div>
+              <div class="chip">Cadastros</div>
+            </div>
+
+            <div class="card kpi teal">
+              <div class="label">Ativos</div>
+              <div id="monActive" class="value">0</div>
+              <div class="chip">Vigilância</div>
+            </div>
+
+            <div class="card kpi mag">
+              <div class="label">Alta Prioridade</div>
+              <div id="monPriority" class="value">0</div>
+              <div class="chip">Tratamento</div>
+            </div>
+
+            <div class="card kpi">
+              <div class="label">Categorias</div>
+              <div id="monCategories" class="value">0</div>
+              <div class="chip">Classificação</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card pad">
+          <div class="section-head">
+            <div>
+              <h3>Lista Monitorada</h3>
+              <div class="subtle">Base operacional para correlação de alertas e alvos</div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Placa</th>
+                  <th>Nome / Alvo</th>
+                  <th>Categoria</th>
+                  <th>Nota</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="monitoringTableBody">
+                <tr><td colspan="5">Aguardando dados...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('open');
+    }
+
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebarOverlay').classList.remove('open');
+    }
+
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return '—';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getStatusTag(item) {
+      const active = item.isActive === true || item.active === true || item.status === 'active';
+      return active
+        ? '<span class="tag ok"><span class="dot"></span>ATIVO</span>'
+        : '<span class="tag alert"><span class="dot"></span>INATIVO</span>';
+    }
+
+    function isHighPriority(item) {
+      const priority = String(item.priority || item.level || item.severity || '').toLowerCase();
+      return ['alta', 'high', 'critical', 'critica', 'crítica'].includes(priority);
+    }
+
+    function renderMonitoring(items) {
+      const body = document.getElementById('monitoringTableBody');
+
+      document.getElementById('monTotal').textContent = items.length;
+      document.getElementById('monActive').textContent = items.filter((item) => item.isActive === true || item.active === true || item.status === 'active').length;
+      document.getElementById('monPriority').textContent = items.filter(isHighPriority).length;
+      document.getElementById('monCategories').textContent = new Set(items.map((item) => item.category || item.type || item.group).filter(Boolean)).size;
+
+      if (!items.length) {
+        body.innerHTML = '<tr><td colspan="5">Nenhuma placa monitorada encontrada.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.plate || 'Sem placa')}</td>
+          <td>${escapeHtml(item.name || item.target_name || item.owner || 'Não informado')}</td>
+          <td>${escapeHtml(item.category || item.type || item.group || 'Sem categoria')}</td>
+          <td>${escapeHtml(item.note || item.observation || item.description || '—')}</td>
+          <td>${getStatusTag(item)}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function initPage(user) {
+      document.getElementById('userEmail').textContent = user.email || 'Operador';
+      document.body.style.display = 'block';
+
+      await window.requestPushPermissionAndToken();
+      window.startForegroundNotifications();
+
+      window.firestoreSync.onMonitoringChange((items) => {
+        renderMonitoring(items);
+        document.getElementById('conn').textContent = '✓ Online';
+      });
+    }
+
+    firebase.auth().onAuthStateChanged((user) => {
+      if (!user) {
+        window.location.href = './login.html';
+        return;
+      }
+      initPage(user);
+    });
+  </script>
+</body>
+</html>
